@@ -1,10 +1,16 @@
-class ObjectDetector {
+// AutoWheel Object Detection Application
+class AutoWheelDetector {
     constructor() {
         this.model = null;
         this.session = null;
         this.isModelLoaded = false;
         this.isCameraActive = false;
         this.stream = null;
+        this.isRealtime = false;
+        this.animationFrame = null;
+        this.lastFpsTime = 0;
+        this.frameCount = 0;
+        this.currentFps = 0;
         
         // YOLO configuration
         this.inputSize = 640;
@@ -20,56 +26,108 @@ class ObjectDetector {
             'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse',
             'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
             'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier',
-            'toothbrush', 'wheelchair' // Added wheelchair as it's important for our project
+            'toothbrush', 'wheelchair'
         ];
         
         this.initializeApp();
     }
 
     async initializeApp() {
+        this.showLoading(true);
         await this.loadModel();
         this.setupEventListeners();
+        this.setupDemoImages();
         this.updateUI();
+        this.showLoading(false);
+        this.showMessage('AutoWheel AI Demo Ready! 🚀', 'success');
     }
 
     async loadModel() {
         try {
-            this.showMessage('Loading AI model...', 'info');
+            this.updateLoadingProgress(30);
+            this.showMessage('Loading YOLOv8 AI model...', 'info');
             
-            // For GitHub Pages, the model should be in the same directory
-            this.session = await ort.InferenceSession.create('./best.onnx', {
-                executionProviders: ['webgl'],
-                graphOptimizationLevel: 'all'
-            });
+            // Try to load ONNX model first
+            try {
+                this.session = await ort.InferenceSession.create('./model/best.onnx', {
+                    executionProviders: ['webgl'],
+                    graphOptimizationLevel: 'all'
+                });
+                this.isModelLoaded = true;
+                this.updateLoadingProgress(100);
+                this.showMessage('YOLOv8 model loaded successfully! 🤖', 'success');
+                return;
+            } catch (onnxError) {
+                console.warn('ONNX model failed, using TensorFlow.js fallback:', onnxError);
+            }
             
-            this.isModelLoaded = true;
-            this.showMessage('AI model loaded successfully!', 'success');
-            console.log('Model loaded successfully');
+            // Fallback to TensorFlow.js
+            this.updateLoadingProgress(60);
+            if (typeof cocoSsd !== 'undefined') {
+                this.model = await cocoSsd.load();
+                this.isModelLoaded = true;
+                this.updateLoadingProgress(100);
+                this.showMessage('TensorFlow.js model loaded! 🔍', 'success');
+            } else {
+                throw new Error('No AI model available');
+            }
+            
         } catch (error) {
-            console.error('Error loading model:', error);
-            this.showMessage('Error loading AI model. Please check console for details.', 'error');
+            console.error('Model loading failed:', error);
+            this.isModelLoaded = false;
+            this.showMessage('AI model failed to load. Using demo mode.', 'error');
         }
     }
 
     setupEventListeners() {
+        // Camera controls
         document.getElementById('startCamera').addEventListener('click', () => this.startCamera());
         document.getElementById('stopCamera').addEventListener('click', () => this.stopCamera());
-        document.getElementById('captureImage').addEventListener('click', () => this.captureAndDetect());
+        
+        // Detection modes
+        document.getElementById('realtimeToggle').addEventListener('click', () => this.toggleRealtime());
+        document.getElementById('singleDetection').addEventListener('click', () => this.singleDetection());
+        
+        // File upload
+        document.getElementById('fileInput').addEventListener('change', (e) => this.handleFileUpload(e));
+        
+        // Handle visibility change for camera
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && this.isCameraActive) {
+                this.stopCamera();
+            }
+        });
+    }
+
+    setupDemoImages() {
+        // Preload demo images
+        const demoImages = [
+            'assets/demo-images/classroom.jpg',
+            'assets/demo-images/corridor.jpg', 
+            'assets/demo-images/crowded.jpg'
+        ];
+        
+        demoImages.forEach(src => {
+            const img = new Image();
+            img.src = src;
+        });
     }
 
     async startCamera() {
         try {
-            this.showMessage('Accessing camera...', 'info');
+            this.showMessage('Starting camera...', 'info');
             
-            this.stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { 
-                    facingMode: 'environment',
+            const constraints = {
+                video: {
                     width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                } 
-            });
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                }
+            };
             
+            this.stream = await navigator.mediaDevices.getUserMedia(constraints);
             const video = document.getElementById('webcam');
+            
             video.srcObject = this.stream;
             
             video.onloadedmetadata = () => {
@@ -77,60 +135,122 @@ class ObjectDetector {
                 this.isCameraActive = true;
                 this.hideCameraPlaceholder();
                 this.updateUI();
-                this.showMessage('Camera activated successfully!', 'success');
+                this.showMessage('Camera started successfully! 📷', 'success');
+                
+                // Start real-time detection if enabled
+                if (this.isRealtime) {
+                    this.startRealtimeDetection();
+                }
             };
             
         } catch (error) {
-            console.error('Error accessing camera:', error);
-            this.showMessage('Error accessing camera. Please ensure you have granted camera permissions.', 'error');
+            console.error('Camera error:', error);
+            this.handleCameraError(error);
         }
     }
 
     stopCamera() {
+        if (this.animationFrame) {
+            cancelAnimationFrame(this.animationFrame);
+            this.animationFrame = null;
+        }
+        
         if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
             this.stream = null;
         }
         
         this.isCameraActive = false;
+        this.isRealtime = false;
         this.showCameraPlaceholder();
         this.updateUI();
         this.showMessage('Camera stopped', 'info');
     }
 
-    hideCameraPlaceholder() {
-        document.getElementById('cameraPlaceholder').style.display = 'none';
+    async toggleRealtime() {
+        this.isRealtime = !this.isRealtime;
+        
+        if (this.isRealtime && this.isCameraActive) {
+            this.startRealtimeDetection();
+            this.showMessage('Real-time detection started! 🔄', 'success');
+        } else if (this.animationFrame) {
+            cancelAnimationFrame(this.animationFrame);
+            this.animationFrame = null;
+            this.showMessage('Real-time detection stopped', 'info');
+        }
+        
+        this.updateUI();
     }
 
-    showCameraPlaceholder() {
-        document.getElementById('cameraPlaceholder').style.display = 'flex';
+    async singleDetection() {
+        if (!this.isCameraActive && !document.getElementById('uploadedImage').style.display !== 'none') {
+            this.showMessage('Please start camera or upload an image first', 'warning');
+            return;
+        }
+        
+        await this.detectObjects();
     }
 
-    async captureAndDetect() {
-        if (!this.isCameraActive || !this.isModelLoaded) {
-            this.showMessage('Please start camera and ensure model is loaded', 'error');
+    async startRealtimeDetection() {
+        if (!this.isCameraActive || !this.isRealtime) return;
+        
+        const processFrame = async () => {
+            if (!this.isCameraActive || !this.isRealtime) return;
+            
+            await this.detectObjects();
+            this.updateFPS();
+            
+            this.animationFrame = requestAnimationFrame(processFrame);
+        };
+        
+        this.animationFrame = requestAnimationFrame(processFrame);
+    }
+
+    async detectObjects() {
+        if (!this.isModelLoaded) {
+            this.showMessage('AI model not loaded', 'error');
             return;
         }
 
+        const startTime = performance.now();
+        
         try {
-            const startTime = performance.now();
-            this.showMessage('Processing image...', 'info');
-
-            const video = document.getElementById('webcam');
-            const canvas = document.getElementById('outputCanvas');
-            const resultsContainer = document.getElementById('results');
+            let canvas = document.getElementById('outputCanvas');
+            let sourceElement;
             
-            // Set canvas dimensions to match video
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            if (this.isCameraActive) {
+                sourceElement = document.getElementById('webcam');
+            } else {
+                sourceElement = document.getElementById('uploadedImage');
+            }
+            
+            // Set canvas dimensions
+            canvas.width = sourceElement.videoWidth || sourceElement.naturalWidth;
+            canvas.height = sourceElement.videoHeight || sourceElement.naturalHeight;
             
             const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.drawImage(sourceElement, 0, 0, canvas.width, canvas.height);
             
-            // Perform detection
-            const detections = await this.detectObjects(canvas);
+            let detections = [];
             
-            // Draw bounding boxes
+            if (this.session) {
+                // Use ONNX model
+                detections = await this.detectWithONNX(canvas);
+            } else if (this.model) {
+                // Use TensorFlow.js model
+                detections = await this.model.detect(canvas);
+                detections = detections.map(det => ({
+                    bbox: det.bbox,
+                    confidence: det.score,
+                    class: det.class,
+                    label: det.class
+                }));
+            } else {
+                // Demo mode
+                detections = this.generateDemoDetections();
+            }
+            
+            // Draw detections
             this.drawDetections(ctx, detections);
             
             // Display results
@@ -140,20 +260,21 @@ class ObjectDetector {
             const processingTime = endTime - startTime;
             
             this.updatePerformanceMetrics(detections, processingTime);
-            this.showMessage(`Detection completed in ${processingTime.toFixed(0)}ms`, 'success');
             
         } catch (error) {
-            console.error('Error during detection:', error);
-            this.showMessage('Error during object detection', 'error');
+            console.error('Detection error:', error);
+            this.showMessage('Detection failed', 'error');
         }
     }
 
-    async detectObjects(canvas) {
-        // Preprocess image for YOLO
+    async detectWithONNX(canvas) {
+        // Preprocess image
         const input = this.preprocessImage(canvas);
         
         // Run inference
-        const feeds = { images: new ort.Tensor('float32', input, [1, 3, this.inputSize, this.inputSize]) };
+        const feeds = { 
+            images: new ort.Tensor('float32', input, [1, 3, this.inputSize, this.inputSize]) 
+        };
         const results = await this.session.run(feeds);
         
         // Post-process results
@@ -173,9 +294,9 @@ class ObjectDetector {
         
         // Normalize and convert to CHW format
         for (let i = 0; i < imageData.data.length; i += 4) {
-            input[i / 4] = imageData.data[i] / 255.0;         // R
-            input[imageData.data.length / 4 + i / 4] = imageData.data[i + 1] / 255.0; // G
-            input[imageData.data.length / 2 + i / 4] = imageData.data[i + 2] / 255.0; // B
+            input[i / 4] = imageData.data[i] / 255.0;
+            input[imageData.data.length / 4 + i / 4] = imageData.data[i + 1] / 255.0;
+            input[imageData.data.length / 2 + i / 4] = imageData.data[i + 2] / 255.0;
         }
         
         return input;
@@ -188,7 +309,7 @@ class ObjectDetector {
         for (let i = 0; i < output.length; i += 6) {
             const [x1, y1, x2, y2, confidence, classId] = output.slice(i, i + 6);
             
-            if (confidence > 0.5) { // Confidence threshold
+            if (confidence > 0.5) {
                 detections.push({
                     bbox: [
                         x1 * originalWidth / this.inputSize,
@@ -207,38 +328,49 @@ class ObjectDetector {
     }
 
     drawDetections(ctx, detections) {
-        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-        ctx.drawImage(document.getElementById('webcam'), 0, 0, ctx.canvas.width, ctx.canvas.height);
+        // Clear previous drawings by redrawing the original image
+        if (this.isCameraActive) {
+            ctx.drawImage(document.getElementById('webcam'), 0, 0, ctx.canvas.width, ctx.canvas.height);
+        } else {
+            ctx.drawImage(document.getElementById('uploadedImage'), 0, 0, ctx.canvas.width, ctx.canvas.height);
+        }
         
         detections.forEach(det => {
             const [x, y, width, height] = det.bbox;
+            const label = `${det.label} ${(det.confidence * 100).toFixed(1)}%`;
+            
+            // Choose color based on class
+            let color = '#00ff00'; // Default green
+            if (det.label === 'person') color = '#ef4444';
+            if (det.label === 'chair') color = '#10b981';
+            if (det.label === 'door') color = '#3b82f6';
             
             // Draw bounding box
-            ctx.strokeStyle = '#00ff00';
+            ctx.strokeStyle = color;
             ctx.lineWidth = 3;
             ctx.strokeRect(x, y, width, height);
             
             // Draw label background
-            ctx.fillStyle = '#00ff00';
-            const text = `${det.label} ${(det.confidence * 100).toFixed(1)}%`;
-            const textWidth = ctx.measureText(text).width;
-            ctx.fillRect(x, y - 20, textWidth + 10, 20);
+            ctx.fillStyle = color;
+            const textWidth = ctx.measureText(label).width;
+            ctx.fillRect(x, y - 25, textWidth + 10, 25);
             
             // Draw label text
             ctx.fillStyle = '#000000';
-            ctx.font = '16px Arial';
-            ctx.fillText(text, x + 5, y - 5);
+            ctx.font = '14px Arial';
+            ctx.fillText(label, x + 5, y - 8);
         });
     }
 
     displayResults(detections) {
         const resultsContainer = document.getElementById('results');
         
-        if (detections.length === 0) {
+        if (!detections || detections.length === 0) {
             resultsContainer.innerHTML = `
                 <div class="initial-state">
-                    <span class="results-icon">🔍</span>
-                    <p>No objects detected with high confidence</p>
+                    <div class="results-icon">🔍</div>
+                    <p>No objects detected</p>
+                    <p class="results-sub">Try adjusting camera or image</p>
                 </div>
             `;
             return;
@@ -266,84 +398,221 @@ class ObjectDetector {
     }
 
     updatePerformanceMetrics(detections, processingTime) {
+        const objectsCount = detections ? detections.length : 0;
         const avgConfidence = detections.length > 0 
             ? detections.reduce((sum, det) => sum + det.confidence, 0) / detections.length 
             : 0;
         
+        document.getElementById('objectsCount').textContent = `${objectsCount} objects`;
+        document.getElementById('confidenceAvg').textContent = `${(avgConfidence * 100).toFixed(1)}% avg`;
+        document.getElementById('processingTime').textContent = `${processingTime.toFixed(1)} ms`;
+        
+        // Update confidence bar
+        const confidenceBar = document.getElementById('confidenceBar');
+        confidenceBar.style.width = `${avgConfidence * 100}%`;
         document.getElementById('confidenceValue').textContent = `${(avgConfidence * 100).toFixed(1)}%`;
-        document.getElementById('confidenceBar').style.width = `${avgConfidence * 100}%`;
-        document.getElementById('processingTime').textContent = `${processingTime.toFixed(0)} ms`;
+        
+        // Update model status
+        document.getElementById('modelStatus').textContent = this.session ? 'YOLOv8 (ONNX)' : 'COCO-SSD (TF.js)';
+    }
+
+    updateFPS() {
+        this.frameCount++;
+        const now = performance.now();
+        
+        if (now >= this.lastFpsTime + 1000) {
+            this.currentFps = Math.round((this.frameCount * 1000) / (now - this.lastFpsTime));
+            this.frameCount = 0;
+            this.lastFpsTime = now;
+            
+            document.getElementById('fpsValue').textContent = this.currentFps;
+            document.getElementById('detectionStatus').textContent = 
+                this.isRealtime ? `Real-time (${this.currentFps}FPS)` : 'Single Detection';
+        }
+    }
+
+    async handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        this.showMessage('Loading image...', 'info');
+        
+        const img = document.getElementById('uploadedImage');
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            img.src = e.target.result;
+            img.style.display = 'block';
+            this.hideCameraPlaceholder();
+            
+            // Stop camera if active
+            if (this.isCameraActive) {
+                this.stopCamera();
+            }
+            
+            document.getElementById('fileInfo').textContent = `File: ${file.name}`;
+            
+            // Auto-detect on image load
+            img.onload = async () => {
+                await this.detectObjects();
+            };
+        };
+        
+        reader.readAsDataURL(file);
+    }
+
+    loadDemoImage(src) {
+        this.showMessage('Loading demo image...', 'info');
+        
+        const img = document.getElementById('uploadedImage');
+        img.src = src;
+        img.style.display = 'block';
+        this.hideCameraPlaceholder();
+        
+        // Stop camera if active
+        if (this.isCameraActive) {
+            this.stopCamera();
+        }
+        
+        document.getElementById('fileInfo').textContent = 'Demo image loaded';
+        
+        img.onload = async () => {
+            await this.detectObjects();
+        };
+    }
+
+    generateDemoDetections() {
+        // Fallback demo detections
+        return [
+            {
+                bbox: [100, 100, 150, 300],
+                confidence: 0.92,
+                class: 0,
+                label: 'person'
+            },
+            {
+                bbox: [300, 200, 100, 150],
+                confidence: 0.88,
+                class: 56,
+                label: 'chair'
+            },
+            {
+                bbox: [500, 150, 120, 200],
+                confidence: 0.85,
+                label: 'door'
+            }
+        ];
+    }
+
+    hideCameraPlaceholder() {
+        document.getElementById('cameraPlaceholder').style.display = 'none';
+    }
+
+    showCameraPlaceholder() {
+        document.getElementById('cameraPlaceholder').style.display = 'flex';
+        document.getElementById('uploadedImage').style.display = 'none';
     }
 
     updateUI() {
         const startBtn = document.getElementById('startCamera');
         const stopBtn = document.getElementById('stopCamera');
-        const captureBtn = document.getElementById('captureImage');
+        const realtimeBtn = document.getElementById('realtimeToggle');
+        const singleBtn = document.getElementById('singleDetection');
         
         startBtn.disabled = this.isCameraActive;
         stopBtn.disabled = !this.isCameraActive;
-        captureBtn.disabled = !(this.isCameraActive && this.isModelLoaded);
+        realtimeBtn.disabled = !this.isCameraActive;
+        singleBtn.disabled = !this.isCameraActive && !document.getElementById('uploadedImage').style.display !== 'none';
+        
+        // Update realtime button text
+        realtimeBtn.innerHTML = this.isRealtime ? 
+            '<span class="btn-icon">⏸️</span> Stop Real-time' : 
+            '<span class="btn-icon">🔍</span> Real-time Detection';
+    }
+
+    handleCameraError(error) {
+        let message = 'Camera access failed. ';
+        
+        if (error.name === 'NotAllowedError') {
+            message += 'Please allow camera permissions in your browser settings.';
+        } else if (error.name === 'NotFoundError') {
+            message += 'No camera found. Please use image upload instead.';
+        } else {
+            message += 'Please try using image upload feature.';
+        }
+        
+        this.showMessage(message, 'error');
     }
 
     showMessage(message, type = 'info') {
-        // Simple message display - you can enhance this with toast notifications
-        console.log(`${type.toUpperCase()}: ${message}`);
+        // Create or get status element
+        let statusElement = document.getElementById('statusMessage');
+        if (!statusElement) {
+            statusElement = document.createElement('div');
+            statusElement.id = 'statusMessage';
+            statusElement.style.cssText = `
+                position: fixed;
+                top: 100px;
+                right: 20px;
+                padding: 1rem 1.5rem;
+                border-radius: 8px;
+                color: white;
+                z-index: 1000;
+                max-width: 300px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                font-weight: 500;
+                transition: all 0.3s;
+            `;
+            document.body.appendChild(statusElement);
+        }
         
-        // Update a status element if you add one to your HTML
-        const statusElement = document.getElementById('status') || this.createStatusElement();
         statusElement.textContent = message;
-        statusElement.className = `status status-${type}`;
+        statusElement.style.background = 
+            type === 'success' ? '#10b981' :
+            type === 'error' ? '#ef4444' :
+            type === 'warning' ? '#f59e0b' : '#3b82f6';
+        
+        statusElement.style.display = 'block';
+        
+        setTimeout(() => {
+            statusElement.style.display = 'none';
+        }, 4000);
     }
 
-    createStatusElement() {
-        const status = document.createElement('div');
-        status.id = 'status';
-        status.style.cssText = `
-            position: fixed;
-            top: 80px;
-            right: 20px;
-            padding: 10px 20px;
-            border-radius: 5px;
-            color: white;
-            z-index: 1000;
-            max-width: 300px;
-        `;
-        document.body.appendChild(status);
-        return status;
+    showLoading(show) {
+        const overlay = document.getElementById('loadingOverlay');
+        overlay.style.display = show ? 'flex' : 'none';
+    }
+
+    updateLoadingProgress(percent) {
+        const progressBar = document.getElementById('loadingProgress');
+        progressBar.style.width = `${percent}%`;
     }
 }
 
-// Color schemes for status messages
-const statusColors = {
-    info: '#3b82f6',
-    success: '#10b981',
-    error: '#ef4444',
-    warning: '#f59e0b'
-};
+// Utility functions
+function scrollToDemo() {
+    document.getElementById('demo').scrollIntoView({ 
+        behavior: 'smooth' 
+    });
+}
 
-// Initialize the application when the page loads
+// Initialize application
+let app;
+
 document.addEventListener('DOMContentLoaded', () => {
-    new ObjectDetector();
+    app = new AutoWheelDetector();
 });
 
-// Add CSS for status messages
-const style = document.createElement('style');
-style.textContent = `
-    .status { 
-        position: fixed; 
-        top: 80px; 
-        right: 20px; 
-        padding: 12px 20px; 
-        border-radius: 8px; 
-        color: white; 
-        z-index: 1000; 
-        max-width: 300px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        font-weight: 500;
-    }
-    .status-info { background: #3b82f6; }
-    .status-success { background: #10b981; }
-    .status-error { background: #ef4444; }
-    .status-warning { background: #f59e0b; }
-`;
-document.head.appendChild(style);
+// Service Worker for offline functionality (optional)
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+                console.log('SW registered: ', registration);
+            })
+            .catch(registrationError => {
+                console.log('SW registration failed: ', registrationError);
+            });
+    });
+}
