@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoWheel - AI Object Detection</title>
+    <link rel="stylesheet" href="Autowheel.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <h1>🚗 AutoWheel</h1>
+                <span>AI-Powered Mobility</span>
+            </div>
+            <nav class="nav">
+                <a href="#demo">Live Demo</a>
+                <a href="#about">About Project</a>
+                <a href="#team">Our Team</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1>Autonomous Self-Driving Wheelchair</h1>
+                <p class="hero-subtitle">AI-powered inclusive mobility solution for Makerere University</p>
+                <div class="hero-stats">
+                    <div class="stat">
+                        <span class="stat-number">95%</span>
+                        <span class="stat-label">Detection Accuracy</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number">&lt;150ms</span>
+                        <span class="stat-label">Response Time</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number">10K+</span>
+                        <span class="stat-label">Lives Impacted</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Live Demo Section -->
+    <section id="demo" class="demo-section">
+        <div class="container">
+            <h2>Live AI Object Detection</h2>
+            <p class="section-subtitle">Experience our YOLOv8 model in real-time using your device camera</p>
+            
+            <div class="demo-container">
+                <div class="camera-controls">
+                    <button id="startCamera" class="btn btn-primary">
+                        <span class="btn-icon">📷</span>
+                        Start Camera
+                    </button>
+                    <button id="stopCamera" class="btn btn-secondary" disabled>
+                        <span class="btn-icon">⏹️</span>
+                        Stop Camera
+                    </button>
+                    <button id="captureImage" class="btn btn-success" disabled>
+                        <span class="btn-icon">📸</span>
+                        Capture & Analyze
+                    </button>
+                </div>
+
+                <div class="camera-preview">
+                    <video id="webcam" autoplay playsinline muted></video>
+                    <canvas id="outputCanvas"></canvas>
+                    <div id="cameraPlaceholder" class="camera-placeholder">
+                        <div class="placeholder-content">
+                            <span class="placeholder-icon">📱</span>
+                            <h3>Camera Feed</h3>
+                            <p>Click "Start Camera" to begin object detection</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="results-panel">
+                    <h3>Detection Results</h3>
+                    <div id="results" class="results-container">
+                        <div class="initial-state">
+                            <span class="results-icon">🔍</span>
+                            <p>Objects will appear here when detected</p>
+                        </div>
+                    </div>
+                    
+                    <div class="performance-metrics">
+                        <div class="metric">
+                            <span class="metric-label">Detection Confidence</span>
+                            <div class="metric-bar">
+                                <div id="confidenceBar" class="metric-fill" style="width: 0%"></div>
+                            </div>
+                            <span id="confidenceValue" class="metric-value">0%</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Processing Speed</span>
+                            <span id="processingTime" class="metric-value">-- ms</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Project Section -->
+    <section id="about" class="about-section">
+        <div class="container">
+            <h2>About Our Project</h2>
+            <div class="project-details">
+                <div class="detail-card">
+                    <h3>🚀 The Challenge</h3>
+                    <p>Persons with disabilities at Makerere University face mobility challenges including dependence on escorts, long waiting times, and difficulty navigating crowded spaces.</p>
+                </div>
+                <div class="detail-card">
+                    <h3>💡 Our Solution</h3>
+                    <p>An autonomous self-driving wheelchair powered by AI and computer vision, capable of safe navigation in dynamic indoor environments using affordable hardware.</p>
+                </div>
+                <div class="detail-card">
+                    <h3>🛠️ Technology Stack</h3>
+                    <ul>
+                        <li><strong>YOLOv8:</strong> Real-time object detection</li>
+                        <li><strong>SLAM:</strong> Simultaneous Localization and Mapping</li>
+                        <li><strong>A* Algorithm:</strong> Optimal path planning</li>
+                        <li><strong>NVIDIA Jetson Nano:</strong> Edge computing</li>
+                        <li><strong>ROS:</strong> Robot Operating System</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Team Section -->
+    <section id="team" class="team-section">
+        <div class="container">
+            <h2>Our Team</h2>
+            <div class="team-members">
+                <div class="member-card">
+                    <div class="member-avatar">KN</div>
+                    <h3>KAYEERA NATHAN</h3>
+                    <p>AI & Software Lead</p>
+                    <span class="member-id">24/U/22913/EVE</span>
+                </div>
+                <div class="member-card">
+                    <div class="member-avatar">NI</div>
+                    <h3>NAMUGANZA ISABELLA REGINA</h3>
+                    <p>Hardware & Project Management</p>
+                    <span class="member-id">24/U/09241/EVE</span>
+                </div>
+            </div>
+            <div class="supervisor">
+                <p><strong>Supervisor:</strong> GGALIWANGO MARVIN</p>
+                <p><strong>Institution:</strong> Makerere University, COCIS, Department of Computer Science</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 AutoWheel - Group SW-AI-49. Autonomous Self-Driving Wheelchair for Inclusive Mobility.</p>
+            <p>Empowering independence through AI and innovation.</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <script src="Autowheel.js"></script>
+</body>
+</html>
