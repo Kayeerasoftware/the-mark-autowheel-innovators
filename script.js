@@ -1,8 +1,7 @@
-// AutoWheel Object Detection Application
+// AutoWheel Object Detection Application - FIXED VERSION
 class AutoWheelDetector {
     constructor() {
         this.model = null;
-        this.session = null;
         this.isModelLoaded = false;
         this.isCameraActive = false;
         this.stream = null;
@@ -12,8 +11,7 @@ class AutoWheelDetector {
         this.frameCount = 0;
         this.currentFps = 0;
         
-        // YOLO configuration
-        this.inputSize = 640;
+        // COCO-SSD class names (80 objects)
         this.classNames = [
             'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck',
             'boat', 'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench',
@@ -26,7 +24,7 @@ class AutoWheelDetector {
             'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse',
             'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
             'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier',
-            'toothbrush', 'wheelchair'
+            'toothbrush'
         ];
         
         this.initializeApp();
@@ -34,48 +32,57 @@ class AutoWheelDetector {
 
     async initializeApp() {
         this.showLoading(true);
-        await this.loadModel();
-        this.setupEventListeners();
-        this.setupDemoImages();
-        this.updateUI();
-        this.showLoading(false);
-        this.showMessage('AutoWheel AI Demo Ready! 🚀', 'success');
+        this.showMessage('🚀 Starting AutoWheel AI Demo...', 'info');
+        
+        try {
+            await this.loadModel();
+            this.setupEventListeners();
+            this.updateUI();
+            this.showLoading(false);
+            this.showMessage('✅ AutoWheel AI Demo Ready! Click "Start Camera" to begin.', 'success');
+        } catch (error) {
+            this.showLoading(false);
+            this.showMessage('❌ Failed to initialize application. Please refresh the page.', 'error');
+            console.error('Initialization error:', error);
+        }
     }
 
     async loadModel() {
         try {
-            this.updateLoadingProgress(30);
-            this.showMessage('Loading YOLOv8 AI model...', 'info');
+            this.updateLoadingProgress(20);
+            this.showMessage('🔧 Loading TensorFlow.js engine...', 'info');
             
-            // Try to load ONNX model first
-            try {
-                this.session = await ort.InferenceSession.create('./model/best.onnx', {
-                    executionProviders: ['webgl'],
-                    graphOptimizationLevel: 'all'
-                });
-                this.isModelLoaded = true;
-                this.updateLoadingProgress(100);
-                this.showMessage('YOLOv8 model loaded successfully! 🤖', 'success');
-                return;
-            } catch (onnxError) {
-                console.warn('ONNX model failed, using TensorFlow.js fallback:', onnxError);
+            // Check if TensorFlow.js is available
+            if (typeof tf === 'undefined') {
+                throw new Error('TensorFlow.js not loaded');
             }
             
-            // Fallback to TensorFlow.js
-            this.updateLoadingProgress(60);
-            if (typeof cocoSsd !== 'undefined') {
-                this.model = await cocoSsd.load();
-                this.isModelLoaded = true;
-                this.updateLoadingProgress(100);
-                this.showMessage('TensorFlow.js model loaded! 🔍', 'success');
-            } else {
-                throw new Error('No AI model available');
-            }
+            this.updateLoadingProgress(50);
+            this.showMessage('🤖 Loading COCO-SSD model (80 objects)...', 'info');
+            
+            // Load COCO-SSD model - this is reliable and works online
+            this.model = await cocoSsd.load();
+            
+            this.updateLoadingProgress(100);
+            this.isModelLoaded = true;
+            
+            // Update model status
+            document.getElementById('modelStatusText').textContent = 'Loaded ✅';
+            document.getElementById('modelStatusText').style.color = '#10b981';
+            
+            console.log('✅ COCO-SSD model loaded successfully');
+            this.showMessage('✅ AI Model loaded! 80+ object classes ready.', 'success');
             
         } catch (error) {
-            console.error('Model loading failed:', error);
+            console.error('❌ Model loading failed:', error);
             this.isModelLoaded = false;
-            this.showMessage('AI model failed to load. Using demo mode.', 'error');
+            document.getElementById('modelStatusText').textContent = 'Failed ❌';
+            document.getElementById('modelStatusText').style.color = '#ef4444';
+            
+            this.showMessage('❌ AI model failed to load. Using demo mode.', 'error');
+            
+            // Even if model fails, we can continue with demo mode
+            this.isModelLoaded = true;
         }
     }
 
@@ -91,7 +98,7 @@ class AutoWheelDetector {
         // File upload
         document.getElementById('fileInput').addEventListener('change', (e) => this.handleFileUpload(e));
         
-        // Handle visibility change for camera
+        // Handle page visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.hidden && this.isCameraActive) {
                 this.stopCamera();
@@ -99,29 +106,17 @@ class AutoWheelDetector {
         });
     }
 
-    setupDemoImages() {
-        // Preload demo images
-        const demoImages = [
-            'assets/demo-images/classroom.jpg',
-            'assets/demo-images/corridor.jpg', 
-            'assets/demo-images/crowded.jpg'
-        ];
-        
-        demoImages.forEach(src => {
-            const img = new Image();
-            img.src = src;
-        });
-    }
-
     async startCamera() {
         try {
-            this.showMessage('Starting camera...', 'info');
+            this.showMessage('📷 Accessing camera...', 'info');
             
+            // Try different camera constraints for better compatibility
             const constraints = {
                 video: {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    frameRate: { ideal: 30 }
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                    frameRate: { ideal: 30 },
+                    facingMode: 'environment'
                 }
             };
             
@@ -135,12 +130,12 @@ class AutoWheelDetector {
                 this.isCameraActive = true;
                 this.hideCameraPlaceholder();
                 this.updateUI();
-                this.showMessage('Camera started successfully! 📷', 'success');
+                this.showMessage('✅ Camera started! Point at objects to detect.', 'success');
                 
-                // Start real-time detection if enabled
-                if (this.isRealtime) {
-                    this.startRealtimeDetection();
-                }
+                // Auto-start real-time detection
+                this.isRealtime = true;
+                this.startRealtimeDetection();
+                
             };
             
         } catch (error) {
@@ -150,11 +145,13 @@ class AutoWheelDetector {
     }
 
     stopCamera() {
+        // Stop animation frame
         if (this.animationFrame) {
             cancelAnimationFrame(this.animationFrame);
             this.animationFrame = null;
         }
         
+        // Stop camera stream
         if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
             this.stream = null;
@@ -164,7 +161,7 @@ class AutoWheelDetector {
         this.isRealtime = false;
         this.showCameraPlaceholder();
         this.updateUI();
-        this.showMessage('Camera stopped', 'info');
+        this.showMessage('⏹️ Camera stopped', 'info');
     }
 
     async toggleRealtime() {
@@ -172,19 +169,19 @@ class AutoWheelDetector {
         
         if (this.isRealtime && this.isCameraActive) {
             this.startRealtimeDetection();
-            this.showMessage('Real-time detection started! 🔄', 'success');
+            this.showMessage('🔄 Real-time detection started!', 'success');
         } else if (this.animationFrame) {
             cancelAnimationFrame(this.animationFrame);
             this.animationFrame = null;
-            this.showMessage('Real-time detection stopped', 'info');
+            this.showMessage('⏸️ Real-time detection paused', 'info');
         }
         
         this.updateUI();
     }
 
     async singleDetection() {
-        if (!this.isCameraActive && !document.getElementById('uploadedImage').style.display !== 'none') {
-            this.showMessage('Please start camera or upload an image first', 'warning');
+        if (!this.isCameraActive && document.getElementById('uploadedImage').style.display !== 'block') {
+            this.showMessage('⚠️ Please start camera or upload an image first', 'warning');
             return;
         }
         
@@ -208,14 +205,14 @@ class AutoWheelDetector {
 
     async detectObjects() {
         if (!this.isModelLoaded) {
-            this.showMessage('AI model not loaded', 'error');
+            this.showMessage('❌ AI model not ready', 'error');
             return;
         }
 
         const startTime = performance.now();
         
         try {
-            let canvas = document.getElementById('outputCanvas');
+            const canvas = document.getElementById('outputCanvas');
             let sourceElement;
             
             if (this.isCameraActive) {
@@ -224,126 +221,71 @@ class AutoWheelDetector {
                 sourceElement = document.getElementById('uploadedImage');
             }
             
-            // Set canvas dimensions
+            // Set canvas dimensions to match source
             canvas.width = sourceElement.videoWidth || sourceElement.naturalWidth;
             canvas.height = sourceElement.videoHeight || sourceElement.naturalHeight;
             
             const ctx = canvas.getContext('2d');
+            
+            // Draw the source image onto canvas
             ctx.drawImage(sourceElement, 0, 0, canvas.width, canvas.height);
             
-            let detections = [];
+            // Perform object detection
+            let predictions = [];
             
-            if (this.session) {
-                // Use ONNX model
-                detections = await this.detectWithONNX(canvas);
-            } else if (this.model) {
-                // Use TensorFlow.js model
-                detections = await this.model.detect(canvas);
-                detections = detections.map(det => ({
-                    bbox: det.bbox,
-                    confidence: det.score,
-                    class: det.class,
-                    label: det.class
+            if (this.model) {
+                // Use COCO-SSD model
+                predictions = await this.model.detect(canvas);
+                
+                // Convert to our format
+                predictions = predictions.map(pred => ({
+                    bbox: [pred.bbox[0], pred.bbox[1], pred.bbox[2], pred.bbox[3]],
+                    confidence: pred.score,
+                    class: pred.class,
+                    label: pred.class
                 }));
             } else {
-                // Demo mode
-                detections = this.generateDemoDetections();
+                // Fallback demo mode
+                predictions = this.generateDemoDetections();
             }
             
-            // Draw detections
-            this.drawDetections(ctx, detections);
+            // Draw bounding boxes and labels
+            this.drawDetections(ctx, predictions);
             
             // Display results
-            this.displayResults(detections);
+            this.displayResults(predictions);
             
             const endTime = performance.now();
             const processingTime = endTime - startTime;
             
-            this.updatePerformanceMetrics(detections, processingTime);
+            this.updatePerformanceMetrics(predictions, processingTime);
             
         } catch (error) {
             console.error('Detection error:', error);
-            this.showMessage('Detection failed', 'error');
+            this.showMessage('❌ Detection failed', 'error');
         }
     }
 
-    async detectWithONNX(canvas) {
-        // Preprocess image
-        const input = this.preprocessImage(canvas);
-        
-        // Run inference
-        const feeds = { 
-            images: new ort.Tensor('float32', input, [1, 3, this.inputSize, this.inputSize]) 
-        };
-        const results = await this.session.run(feeds);
-        
-        // Post-process results
-        return this.postprocessResults(results, canvas.width, canvas.height);
-    }
-
-    preprocessImage(canvas) {
-        const ctx = document.createElement('canvas').getContext('2d');
-        ctx.canvas.width = this.inputSize;
-        ctx.canvas.height = this.inputSize;
-        
-        // Draw and resize image
-        ctx.drawImage(canvas, 0, 0, this.inputSize, this.inputSize);
-        
-        const imageData = ctx.getImageData(0, 0, this.inputSize, this.inputSize);
-        const input = new Float32Array(3 * this.inputSize * this.inputSize);
-        
-        // Normalize and convert to CHW format
-        for (let i = 0; i < imageData.data.length; i += 4) {
-            input[i / 4] = imageData.data[i] / 255.0;
-            input[imageData.data.length / 4 + i / 4] = imageData.data[i + 1] / 255.0;
-            input[imageData.data.length / 2 + i / 4] = imageData.data[i + 2] / 255.0;
-        }
-        
-        return input;
-    }
-
-    postprocessResults(results, originalWidth, originalHeight) {
-        const detections = [];
-        const output = results.output0.data;
-        
-        for (let i = 0; i < output.length; i += 6) {
-            const [x1, y1, x2, y2, confidence, classId] = output.slice(i, i + 6);
-            
-            if (confidence > 0.5) {
-                detections.push({
-                    bbox: [
-                        x1 * originalWidth / this.inputSize,
-                        y1 * originalHeight / this.inputSize,
-                        (x2 - x1) * originalWidth / this.inputSize,
-                        (y2 - y1) * originalHeight / this.inputSize
-                    ],
-                    confidence: confidence,
-                    class: parseInt(classId),
-                    label: this.classNames[parseInt(classId)] || 'unknown'
-                });
-            }
-        }
-        
-        return detections;
-    }
-
-    drawDetections(ctx, detections) {
+    drawDetections(ctx, predictions) {
         // Clear previous drawings by redrawing the original image
         if (this.isCameraActive) {
-            ctx.drawImage(document.getElementById('webcam'), 0, 0, ctx.canvas.width, ctx.canvas.height);
+            const video = document.getElementById('webcam');
+            ctx.drawImage(video, 0, 0, ctx.canvas.width, ctx.canvas.height);
         } else {
-            ctx.drawImage(document.getElementById('uploadedImage'), 0, 0, ctx.canvas.width, ctx.canvas.height);
+            const img = document.getElementById('uploadedImage');
+            ctx.drawImage(img, 0, 0, ctx.canvas.width, ctx.canvas.height);
         }
         
-        detections.forEach(det => {
-            const [x, y, width, height] = det.bbox;
-            const label = `${det.label} ${(det.confidence * 100).toFixed(1)}%`;
+        predictions.forEach(pred => {
+            const [x, y, width, height] = pred.bbox;
+            const label = `${pred.label} ${(pred.confidence * 100).toFixed(1)}%`;
             
             // Choose color based on class
             let color = '#00ff00'; // Default green
-            if (det.label === 'person') color = '#ef4444';
-            if (det.label === 'chair') color = '#10b981';
-            if (det.label === 'door') color = '#3b82f6';
+            if (pred.label === 'person') color = '#ef4444';
+            else if (pred.label === 'chair') color = '#10b981';
+            else if (pred.label === 'car' || pred.label === 'truck' || pred.label === 'bus') color = '#3b82f6';
+            else if (pred.label === 'door') color = '#f59e0b';
             
             // Draw bounding box
             ctx.strokeStyle = color;
@@ -353,42 +295,43 @@ class AutoWheelDetector {
             // Draw label background
             ctx.fillStyle = color;
             const textWidth = ctx.measureText(label).width;
-            ctx.fillRect(x, y - 25, textWidth + 10, 25);
+            const textHeight = 20;
+            ctx.fillRect(x, y - textHeight, textWidth + 10, textHeight);
             
             // Draw label text
-            ctx.fillStyle = '#000000';
-            ctx.font = '14px Arial';
-            ctx.fillText(label, x + 5, y - 8);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText(label, x + 5, y - 5);
         });
     }
 
-    displayResults(detections) {
+    displayResults(predictions) {
         const resultsContainer = document.getElementById('results');
         
-        if (!detections || detections.length === 0) {
+        if (!predictions || predictions.length === 0) {
             resultsContainer.innerHTML = `
                 <div class="initial-state">
                     <div class="results-icon">🔍</div>
                     <p>No objects detected</p>
-                    <p class="results-sub">Try adjusting camera or image</p>
+                    <p class="results-sub">Try pointing at different objects</p>
                 </div>
             `;
             return;
         }
         
-        // Sort by confidence
-        detections.sort((a, b) => b.confidence - a.confidence);
+        // Sort by confidence (highest first)
+        predictions.sort((a, b) => b.confidence - a.confidence);
         
         let html = '';
-        detections.forEach(det => {
-            const confidencePercent = (det.confidence * 100).toFixed(1);
+        predictions.forEach(pred => {
+            const confidencePercent = (pred.confidence * 100).toFixed(1);
             let confidenceClass = 'confidence-low';
-            if (det.confidence > 0.7) confidenceClass = 'confidence-high';
-            else if (det.confidence > 0.5) confidenceClass = 'confidence-medium';
+            if (pred.confidence > 0.7) confidenceClass = 'confidence-high';
+            else if (pred.confidence > 0.5) confidenceClass = 'confidence-medium';
             
             html += `
                 <div class="detection-item ${confidenceClass}">
-                    <div class="detection-label">${det.label}</div>
+                    <div class="detection-label">${pred.label}</div>
                     <div class="detection-confidence">${confidencePercent}% confidence</div>
                 </div>
             `;
@@ -397,12 +340,13 @@ class AutoWheelDetector {
         resultsContainer.innerHTML = html;
     }
 
-    updatePerformanceMetrics(detections, processingTime) {
-        const objectsCount = detections ? detections.length : 0;
-        const avgConfidence = detections.length > 0 
-            ? detections.reduce((sum, det) => sum + det.confidence, 0) / detections.length 
+    updatePerformanceMetrics(predictions, processingTime) {
+        const objectsCount = predictions ? predictions.length : 0;
+        const avgConfidence = predictions && predictions.length > 0 
+            ? predictions.reduce((sum, pred) => sum + pred.confidence, 0) / predictions.length 
             : 0;
         
+        // Update counters
         document.getElementById('objectsCount').textContent = `${objectsCount} objects`;
         document.getElementById('confidenceAvg').textContent = `${(avgConfidence * 100).toFixed(1)}% avg`;
         document.getElementById('processingTime').textContent = `${processingTime.toFixed(1)} ms`;
@@ -412,8 +356,14 @@ class AutoWheelDetector {
         confidenceBar.style.width = `${avgConfidence * 100}%`;
         document.getElementById('confidenceValue').textContent = `${(avgConfidence * 100).toFixed(1)}%`;
         
-        // Update model status
-        document.getElementById('modelStatus').textContent = this.session ? 'YOLOv8 (ONNX)' : 'COCO-SSD (TF.js)';
+        // Update confidence bar color based on average confidence
+        if (avgConfidence > 0.7) {
+            confidenceBar.style.background = '#10b981';
+        } else if (avgConfidence > 0.5) {
+            confidenceBar.style.background = '#f59e0b';
+        } else {
+            confidenceBar.style.background = '#ef4444';
+        }
     }
 
     updateFPS() {
@@ -435,7 +385,7 @@ class AutoWheelDetector {
         const file = event.target.files[0];
         if (!file) return;
 
-        this.showMessage('Loading image...', 'info');
+        this.showMessage('📁 Loading image...', 'info');
         
         const img = document.getElementById('uploadedImage');
         const reader = new FileReader();
@@ -455,51 +405,33 @@ class AutoWheelDetector {
             // Auto-detect on image load
             img.onload = async () => {
                 await this.detectObjects();
+                this.showMessage('✅ Image analyzed!', 'success');
             };
         };
         
         reader.readAsDataURL(file);
     }
 
-    loadDemoImage(src) {
-        this.showMessage('Loading demo image...', 'info');
-        
-        const img = document.getElementById('uploadedImage');
-        img.src = src;
-        img.style.display = 'block';
-        this.hideCameraPlaceholder();
-        
-        // Stop camera if active
-        if (this.isCameraActive) {
-            this.stopCamera();
-        }
-        
-        document.getElementById('fileInfo').textContent = 'Demo image loaded';
-        
-        img.onload = async () => {
-            await this.detectObjects();
-        };
-    }
-
     generateDemoDetections() {
-        // Fallback demo detections
+        // Generate realistic demo detections for fallback
         return [
             {
-                bbox: [100, 100, 150, 300],
+                bbox: [100, 100, 80, 200],
                 confidence: 0.92,
-                class: 0,
+                class: 'person',
                 label: 'person'
             },
             {
-                bbox: [300, 200, 100, 150],
+                bbox: [300, 250, 120, 150],
                 confidence: 0.88,
-                class: 56,
+                class: 'chair',
                 label: 'chair'
             },
             {
-                bbox: [500, 150, 120, 200],
-                confidence: 0.85,
-                label: 'door'
+                bbox: [450, 150, 100, 180],
+                confidence: 0.78,
+                class: 'laptop',
+                label: 'laptop'
             }
         ];
     }
@@ -522,12 +454,16 @@ class AutoWheelDetector {
         startBtn.disabled = this.isCameraActive;
         stopBtn.disabled = !this.isCameraActive;
         realtimeBtn.disabled = !this.isCameraActive;
-        singleBtn.disabled = !this.isCameraActive && !document.getElementById('uploadedImage').style.display !== 'none';
+        singleBtn.disabled = !this.isCameraActive && document.getElementById('uploadedImage').style.display !== 'block';
         
-        // Update realtime button text
-        realtimeBtn.innerHTML = this.isRealtime ? 
-            '<span class="btn-icon">⏸️</span> Stop Real-time' : 
-            '<span class="btn-icon">🔍</span> Real-time Detection';
+        // Update realtime button text and style
+        if (this.isRealtime) {
+            realtimeBtn.innerHTML = '<span class="btn-icon">⏸️</span> Pause Detection';
+            realtimeBtn.style.background = '#ef4444';
+        } else {
+            realtimeBtn.innerHTML = '<span class="btn-icon">🔄</span> Real-time Detection';
+            realtimeBtn.style.background = '#10b981';
+        }
     }
 
     handleCameraError(error) {
@@ -536,47 +472,38 @@ class AutoWheelDetector {
         if (error.name === 'NotAllowedError') {
             message += 'Please allow camera permissions in your browser settings.';
         } else if (error.name === 'NotFoundError') {
-            message += 'No camera found. Please use image upload instead.';
+            message += 'No camera found. Please use image upload or demo images.';
+        } else if (error.name === 'NotSupportedError') {
+            message += 'Your browser does not support camera access.';
         } else {
             message += 'Please try using image upload feature.';
         }
         
         this.showMessage(message, 'error');
+        
+        // Suggest alternative
+        setTimeout(() => {
+            this.showMessage('💡 Try using the demo images or upload your own photo!', 'info');
+        }, 3000);
     }
 
     showMessage(message, type = 'info') {
-        // Create or get status element
-        let statusElement = document.getElementById('statusMessage');
-        if (!statusElement) {
-            statusElement = document.createElement('div');
-            statusElement.id = 'statusMessage';
-            statusElement.style.cssText = `
-                position: fixed;
-                top: 100px;
-                right: 20px;
-                padding: 1rem 1.5rem;
-                border-radius: 8px;
-                color: white;
-                z-index: 1000;
-                max-width: 300px;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                font-weight: 500;
-                transition: all 0.3s;
-            `;
-            document.body.appendChild(statusElement);
-        }
+        const statusElement = document.getElementById('statusMessage');
         
-        statusElement.textContent = message;
-        statusElement.style.background = 
+        // Set styles based on type
+        const backgroundColor = 
             type === 'success' ? '#10b981' :
             type === 'error' ? '#ef4444' :
             type === 'warning' ? '#f59e0b' : '#3b82f6';
         
+        statusElement.textContent = message;
+        statusElement.style.background = backgroundColor;
         statusElement.style.display = 'block';
         
+        // Auto-hide after 5 seconds
         setTimeout(() => {
             statusElement.style.display = 'none';
-        }, 4000);
+        }, 5000);
     }
 
     showLoading(show) {
@@ -590,29 +517,93 @@ class AutoWheelDetector {
     }
 }
 
-// Utility functions
+// Global functions for demo images
+function loadDemoImage(type) {
+    const app = window.autoWheelApp;
+    if (!app) return;
+    
+    const images = {
+        classroom: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=400&h=300&fit=crop',
+        corridor: 'https://images.unsplash.com/photo-1560448204-603b3fc33ddc?w=400&h=300&fit=crop',
+        office: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=400&h=300&fit=crop'
+    };
+    
+    app.showMessage('🖼️ Loading demo image...', 'info');
+    
+    const img = document.getElementById('uploadedImage');
+    img.src = images[type];
+    img.style.display = 'block';
+    app.hideCameraPlaceholder();
+    
+    // Stop camera if active
+    if (app.isCameraActive) {
+        app.stopCamera();
+    }
+    
+    document.getElementById('fileInfo').textContent = `Demo: ${type}`;
+    
+    img.onload = async () => {
+        await app.detectObjects();
+        app.showMessage('✅ Demo image analyzed!', 'success');
+    };
+}
+
 function scrollToDemo() {
     document.getElementById('demo').scrollIntoView({ 
         behavior: 'smooth' 
     });
 }
 
-// Initialize application
-let app;
+// Initialize application when page loads
+let autoWheelApp;
 
 document.addEventListener('DOMContentLoaded', () => {
-    app = new AutoWheelDetector();
+    autoWheelApp = new AutoWheelDetector();
+    window.autoWheelApp = autoWheelApp; // Make it globally available
 });
 
-// Service Worker for offline functionality (optional)
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(registration => {
-                console.log('SW registered: ', registration);
-            })
-            .catch(registrationError => {
-                console.log('SW registration failed: ', registrationError);
-            });
-    });
-}
+// Add CSS for status message
+const statusStyle = document.createElement('style');
+statusStyle.textContent = `
+    .status-message {
+        position: fixed;
+        top: 100px;
+        right: 20px;
+        padding: 1rem 1.5rem;
+        border-radius: 10px;
+        color: white;
+        z-index: 1000;
+        max-width: 400px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        font-weight: 500;
+        display: none;
+        animation: slideInRight 0.3s ease-out;
+    }
+    
+    @keyframes slideInRight {
+        from {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+    
+    .camera-tips {
+        background: #fef3cd;
+        border: 1px solid #f59e0b;
+        border-radius: 8px;
+        padding: 0.75rem;
+        margin-top: 0.5rem;
+        font-size: 0.875rem;
+    }
+    
+    .camera-tips p {
+        margin: 0;
+        color: #92400e;
+    }
+    
+    .demo-image-card {
+        background: var(--surface
