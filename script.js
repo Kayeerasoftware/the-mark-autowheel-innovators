@@ -606,4 +606,57 @@ statusStyle.textContent = `
     }
     
     .demo-image-card {
-        background: var(--surface
+        background: var(--surface);
+        border: 2px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .demo-image-card:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+    }
+    
+    .demo-image-placeholder {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .model-info {
+        background: var(--background);
+        padding: 1rem;
+        border-radius: 8px;
+        margin-top: 1rem;
+    }
+    
+    .model-stats {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .model-stat {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.875rem;
+    }
+    
+    .model-badge {
+        background: #ff6b35;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .loading-note {
+        font-size: 0.875rem;
+        color: var(--text-light);
+        margin-top: 0.5rem;
+    }
+`;
+document.head.appendChild(statusStyle);
