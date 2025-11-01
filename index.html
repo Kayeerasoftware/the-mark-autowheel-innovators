@@ -6,7 +6,8 @@
     <title>AutoWheel - AI Self-Driving Wheelchair Demo</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
 </head>
 <body>
     <!-- Navigation -->
@@ -33,12 +34,12 @@
                 <p class="hero-subtitle">AI-Powered Inclusive Mobility Solution for Makerere University</p>
                 <div class="hero-stats">
                     <div class="stat">
-                        <div class="stat-number">95%</div>
-                        <div class="stat-label">Detection Accuracy</div>
+                        <div class="stat-number">80+</div>
+                        <div class="stat-label">Object Classes</div>
                     </div>
                     <div class="stat">
-                        <div class="stat-number">&lt;150ms</div>
-                        <div class="stat-label">Response Time</div>
+                        <div class="stat-number">Real-time</div>
+                        <div class="stat-label">Detection</div>
                     </div>
                     <div class="stat">
                         <div class="stat-number">10K+</div>
@@ -63,13 +64,13 @@
     <section id="demo" class="demo-section">
         <div class="container">
             <h2 class="section-title">Live AI Object Detection</h2>
-            <p class="section-subtitle">Experience our YOLOv8 model in real-time detection</p>
+            <p class="section-subtitle">Powered by TensorFlow.js COCO-SSD Model - 80+ object classes</p>
 
             <div class="demo-container">
                 <!-- Controls Panel -->
                 <div class="controls-panel">
                     <div class="control-group">
-                        <h3>Camera Input</h3>
+                        <h3>📷 Camera Input</h3>
                         <div class="button-group">
                             <button id="startCamera" class="btn btn-primary">
                                 <span class="btn-icon">📷</span>
@@ -80,13 +81,16 @@
                                 Stop Camera
                             </button>
                         </div>
+                        <div class="camera-tips">
+                            <p><strong>💡 Tip:</strong> Use Chrome/Firefox for best results</p>
+                        </div>
                     </div>
 
                     <div class="control-group">
-                        <h3>Detection Mode</h3>
+                        <h3>🔍 Detection Mode</h3>
                         <div class="button-group">
                             <button id="realtimeToggle" class="btn btn-success">
-                                <span class="btn-icon">🔍</span>
+                                <span class="btn-icon">🔄</span>
                                 Real-time Detection
                             </button>
                             <button id="singleDetection" class="btn btn-warning">
@@ -97,11 +101,11 @@
                     </div>
 
                     <div class="control-group">
-                        <h3>Image Upload</h3>
+                        <h3>📁 Image Upload</h3>
                         <div class="file-upload">
                             <label for="fileInput" class="upload-label">
                                 <span class="upload-icon">📁</span>
-                                Choose Image
+                                Choose Image File
                             </label>
                             <input type="file" id="fileInput" accept="image/*">
                             <div id="fileInfo" class="file-info"></div>
@@ -109,11 +113,38 @@
                     </div>
 
                     <div class="control-group">
-                        <h3>Demo Images</h3>
+                        <h3>🎯 Demo Images</h3>
                         <div class="demo-images-grid">
-                            <img src="assets/demo-images/classroom.jpg" alt="Classroom" class="demo-image" onclick="loadDemoImage(this.src)">
-                            <img src="assets/demo-images/corridor.jpg" alt="Corridor" class="demo-image" onclick="loadDemoImage(this.src)">
-                            <img src="assets/demo-images/crowded.jpg" alt="Crowded Area" class="demo-image" onclick="loadDemoImage(this.src)">
+                            <div class="demo-image-card" onclick="loadDemoImage('classroom')">
+                                <div class="demo-image-placeholder">🏫</div>
+                                <span>Classroom</span>
+                            </div>
+                            <div class="demo-image-card" onclick="loadDemoImage('corridor')">
+                                <div class="demo-image-placeholder">🚶</div>
+                                <span>Corridor</span>
+                            </div>
+                            <div class="demo-image-card" onclick="loadDemoImage('office')">
+                                <div class="demo-image-placeholder">💼</div>
+                                <span>Office</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="model-info">
+                        <h3>🤖 AI Model Info</h3>
+                        <div class="model-stats">
+                            <div class="model-stat">
+                                <span>Model:</span>
+                                <span>COCO-SSD</span>
+                            </div>
+                            <div class="model-stat">
+                                <span>Classes:</span>
+                                <span>80 objects</span>
+                            </div>
+                            <div class="model-stat">
+                                <span>Status:</span>
+                                <span id="modelStatusText">Loading...</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -123,17 +154,18 @@
                     <div class="preview-container">
                         <video id="webcam" autoplay playsinline muted></video>
                         <canvas id="outputCanvas"></canvas>
-                        <img id="uploadedImage" style="display: none;">
+                        <img id="uploadedImage" style="display: none; width: 100%; height: 100%; object-fit: contain;">
                         
                         <div id="cameraPlaceholder" class="camera-placeholder">
                             <div class="placeholder-content">
                                 <div class="placeholder-icon">🤖</div>
                                 <h3>AutoWheel AI Vision</h3>
-                                <p>Start camera or upload image to begin object detection</p>
+                                <p>Start camera or use demo images to begin object detection</p>
                                 <div class="placeholder-features">
                                     <div class="feature">🚶 Person Detection</div>
                                     <div class="feature">🪑 Obstacle Avoidance</div>
                                     <div class="feature">🚪 Door Recognition</div>
+                                    <div class="feature">🛋️ Furniture Detection</div>
                                 </div>
                             </div>
                         </div>
@@ -147,13 +179,16 @@
                         <div class="detection-status">
                             <span id="detectionStatus">Ready</span>
                         </div>
+                        <div class="model-badge">
+                            <span>TensorFlow.js</span>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Results Panel -->
                 <div class="results-panel">
                     <div class="results-header">
-                        <h3>Detection Results</h3>
+                        <h3>🔍 Detection Results</h3>
                         <div class="results-stats">
                             <span id="objectsCount">0 objects</span>
                             <span id="confidenceAvg">0% avg</span>
@@ -164,31 +199,31 @@
                         <div class="initial-state">
                             <div class="results-icon">🔍</div>
                             <p>Detection results will appear here</p>
-                            <p class="results-sub">Objects detected by YOLOv8 model</p>
+                            <p class="results-sub">Objects will be listed with confidence scores</p>
                         </div>
                     </div>
 
                     <div class="performance-metrics">
-                        <h4>Performance Metrics</h4>
+                        <h4>📊 Performance Metrics</h4>
                         <div class="metric">
                             <label>Processing Time:</label>
                             <span id="processingTime">-- ms</span>
                         </div>
                         <div class="metric">
-                            <label>Model Confidence:</label>
+                            <label>Detection Confidence:</label>
                             <div class="confidence-bar">
                                 <div id="confidenceBar" class="confidence-fill"></div>
                             </div>
                             <span id="confidenceValue">0%</span>
                         </div>
                         <div class="metric">
-                            <label>AI Model:</label>
-                            <span id="modelStatus">YOLOv8 (ONNX)</span>
+                            <label>Active Model:</label>
+                            <span>COCO-SSD</span>
                         </div>
                     </div>
 
                     <div class="detection-legend">
-                        <h4>Detection Classes</h4>
+                        <h4>🎨 Detection Classes</h4>
                         <div class="legend-items">
                             <div class="legend-item">
                                 <span class="legend-color person"></span>
@@ -201,6 +236,10 @@
                             <div class="legend-item">
                                 <span class="legend-color door"></span>
                                 <span>Door</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color car"></span>
+                                <span>Vehicle</span>
                             </div>
                         </div>
                     </div>
@@ -233,42 +272,6 @@
         </div>
     </section>
 
-    <!-- Technology Stack -->
-    <section id="technology" class="tech-section">
-        <div class="container">
-            <h2 class="section-title">Technology Stack</h2>
-            <div class="tech-stack">
-                <div class="tech-category">
-                    <h3>🤖 AI & Computer Vision</h3>
-                    <div class="tech-items">
-                        <div class="tech-item">YOLOv8 Object Detection</div>
-                        <div class="tech-item">ONNX Runtime</div>
-                        <div class="tech-item">TensorFlow.js</div>
-                        <div class="tech-item">OpenCV</div>
-                    </div>
-                </div>
-                <div class="tech-category">
-                    <h3>🗺️ Navigation & Mapping</h3>
-                    <div class="tech-items">
-                        <div class="tech-item">SLAM Algorithm</div>
-                        <div class="tech-item">A* Path Planning</div>
-                        <div class="tech-item">ROS Framework</div>
-                        <div class="tech-item">Sensor Fusion</div>
-                    </div>
-                </div>
-                <div class="tech-category">
-                    <h3>💻 Hardware & Deployment</h3>
-                    <div class="tech-items">
-                        <div class="tech-item">NVIDIA Jetson Nano</div>
-                        <div class="tech-item">RGB-D Cameras</div>
-                        <div class="tech-item">LiDAR Sensors</div>
-                        <div class="tech-item">Web Deployment</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
     <!-- Team Section -->
     <section id="team" class="team-section">
         <div class="container">
@@ -283,6 +286,7 @@
                         <span class="skill">YOLOv8</span>
                         <span class="skill">TensorFlow</span>
                         <span class="skill">Python</span>
+                        <span class="skill">Web AI</span>
                     </div>
                 </div>
                 <div class="team-member">
@@ -294,6 +298,7 @@
                         <span class="skill">Embedded Systems</span>
                         <span class="skill">ROS</span>
                         <span class="skill">Project Management</span>
+                        <span class="skill">Hardware</span>
                     </div>
                 </div>
             </div>
@@ -336,15 +341,17 @@
         <div class="loading-content">
             <div class="loading-spinner"></div>
             <h3>Loading AI Model</h3>
-            <p>Initializing YOLOv8 object detection...</p>
+            <p>Initializing TensorFlow.js COCO-SSD model...</p>
             <div class="loading-progress">
                 <div id="loadingProgress" class="loading-progress-bar"></div>
             </div>
+            <p class="loading-note">This may take a few moments on first load</p>
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <!-- Status Messages -->
+    <div id="statusMessage" class="status-message"></div>
+
     <script src="script.js"></script>
 </body>
 </html>
